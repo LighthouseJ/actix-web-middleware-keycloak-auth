@@ -225,6 +225,7 @@
 // Force exposed items to be documented
 #![deny(missing_docs)]
 
+#[cfg(feature = "selective_application")]
 extern crate http as http_crate;
 
 mod errors;
@@ -235,7 +236,10 @@ mod roles;
 mod paperclip;
 
 use actix_web::guard::Guard;
+
+#[cfg(feature = "selective_application")]
 use http_crate::Method;
+
 /// _(Re-exported from the `jsonwebtoken` crate)_
 pub use jsonwebtoken::DecodingKey;
 
@@ -274,6 +278,8 @@ pub struct KeycloakAuth<PP: PassthroughPolicy> {
     pub required_roles: Vec<Role>,
     /// Policy that defines whether or not the middleware should return a HTTP error or continue to the handler (depending on which error occurred)
     pub passthrough_policy: PP,
+
+    #[cfg(feature = "selective_application")]
     /// A guard (which may contain multiple guards) that can select if Keycloak is applied to a request
     pub apply_guard: Option<Rc<dyn Guard>>,
 }
@@ -286,10 +292,12 @@ impl KeycloakAuth<AlwaysReturnPolicy> {
             keycloak_oid_public_key,
             required_roles: vec![],
             passthrough_policy: AlwaysReturnPolicy,
+            #[cfg(feature = "selective_application")]
             apply_guard: None
         }
     }
 
+    #[cfg(feature = "selective_application")]
     /// Set a guard to apply authentication to
     pub fn set_apply_guard<G: Guard + 'static>(mut self, guard: G) -> Self {
         self.apply_guard = Some(Rc::new(guard));
@@ -317,6 +325,7 @@ where
             keycloak_oid_public_key: self.keycloak_oid_public_key.clone(),
             required_roles: self.required_roles.clone(),
             passthrough_policy: self.passthrough_policy.clone(),
+            #[cfg(feature = "selective_application")]
             apply_guard: self.apply_guard.clone(),
         })
     }
@@ -329,6 +338,8 @@ pub struct KeycloakAuthMiddleware<PP: PassthroughPolicy, S> {
     keycloak_oid_public_key: DecodingKey,
     required_roles: Vec<Role>,
     passthrough_policy: PP,
+
+    #[cfg(feature = "selective_application")]
     apply_guard: Option<Rc<dyn Guard>>,
 }
 
@@ -560,6 +571,7 @@ where
 
     fn call(&self, req: ServiceRequest) -> Self::Future {
 
+        #[cfg(feature = "selective_application")]
         // borrowed from actix-web files service
         let does_method_apply = if let Some(guard) = &self.apply_guard {
             // execute user-defined guards
@@ -569,6 +581,7 @@ where
             matches!(req.method(), &Method::HEAD | &Method::GET)
         };
 
+        #[cfg(feature = "selective_application")]
         if !does_method_apply {
             info!("Not applying authentication for this request");
             return Box::pin(
