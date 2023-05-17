@@ -62,6 +62,7 @@ async fn main() -> std::io::Result<()> {
             required_roles: vec![Role::Realm {
                 role: "test".to_owned(),
             }],
+            apply_guard: None,
         };
 
         App::new()

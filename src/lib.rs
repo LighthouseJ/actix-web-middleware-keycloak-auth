@@ -225,6 +225,8 @@
 // Force exposed items to be documented
 #![deny(missing_docs)]
 
+extern crate http as http_crate;
+
 mod errors;
 mod extractors;
 mod roles;
@@ -232,6 +234,8 @@ mod roles;
 #[cfg(feature = "paperclip_compat")]
 mod paperclip;
 
+use actix_web::guard::Guard;
+use http_crate::Method;
 /// _(Re-exported from the `jsonwebtoken` crate)_
 pub use jsonwebtoken::DecodingKey;
 
@@ -241,13 +245,14 @@ use actix_web::{Error, HttpMessage};
 use chrono::{serde::ts_seconds, DateTime, Utc};
 use futures_util::future::{ok, ready, FutureExt, LocalBoxFuture, Ready};
 use jsonwebtoken::{decode, decode_header, Validation};
-use log::{debug, trace};
+use log::{debug, trace, info};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::{from_value, Value};
 use std::collections::HashMap;
 use std::iter::FromIterator;
 use std::ops::Deref;
+use std::rc::Rc;
 use uuid::Uuid;
 
 pub use errors::AuthError;
@@ -269,6 +274,8 @@ pub struct KeycloakAuth<PP: PassthroughPolicy> {
     pub required_roles: Vec<Role>,
     /// Policy that defines whether or not the middleware should return a HTTP error or continue to the handler (depending on which error occurred)
     pub passthrough_policy: PP,
+    /// A guard (which may contain multiple guards) that can select if Keycloak is applied to a request
+    pub apply_guard: Option<Rc<dyn Guard>>,
 }
 
 impl KeycloakAuth<AlwaysReturnPolicy> {
@@ -279,7 +286,14 @@ impl KeycloakAuth<AlwaysReturnPolicy> {
             keycloak_oid_public_key,
             required_roles: vec![],
             passthrough_policy: AlwaysReturnPolicy,
+            apply_guard: None
         }
+    }
+
+    /// Set a guard to apply authentication to
+    pub fn set_apply_guard<G: Guard + 'static>(mut self, guard: G) -> Self {
+        self.apply_guard = Some(Rc::new(guard));
+        self
     }
 }
 
@@ -303,6 +317,7 @@ where
             keycloak_oid_public_key: self.keycloak_oid_public_key.clone(),
             required_roles: self.required_roles.clone(),
             passthrough_policy: self.passthrough_policy.clone(),
+            apply_guard: self.apply_guard.clone(),
         })
     }
 }
@@ -314,6 +329,7 @@ pub struct KeycloakAuthMiddleware<PP: PassthroughPolicy, S> {
     keycloak_oid_public_key: DecodingKey,
     required_roles: Vec<Role>,
     passthrough_policy: PP,
+    apply_guard: Option<Rc<dyn Guard>>,
 }
 
 /// Auth result that is injected in request-local data
@@ -543,6 +559,26 @@ where
     dev::forward_ready!(service);
 
     fn call(&self, req: ServiceRequest) -> Self::Future {
+
+        // borrowed from actix-web files service
+        let does_method_apply = if let Some(guard) = &self.apply_guard {
+            // execute user-defined guards
+            (**guard).check(&req.guard_ctx())
+        } else {
+            // default guards
+            matches!(req.method(), &Method::HEAD | &Method::GET)
+        };
+
+        if !does_method_apply {
+            info!("Not applying authentication for this request");
+            return Box::pin(
+                self.service
+                    .call(req)
+                    .map(map_body_left),
+            );
+        }
+
+
         let auth_header = req.headers().get("Authorization");
 
         match auth_header {
@@ -684,8 +720,9 @@ where
                                             extensions
                                                 .insert(KeycloakAuthStatus::Failure(e.clone()));
                                         }
-                                        Box::pin(self.service.call(req).map(map_body_left))
-                                    }
+                                                // Box::pin(self.service.call(req).map(map_body_left))
+                                                todo!()
+                                            }
                                     PassthroughAction::Return => Box::pin(ready(Ok(req
                                         .into_response(
                                             e.to_response(self.detailed_responses)

@@ -174,6 +174,7 @@ async fn no_bearer_token_no_debug() {
         passthrough_policy: AlwaysReturnPolicy,
         keycloak_oid_public_key: DecodingKey::from_rsa_pem(KEYCLOAK_PK.as_bytes()).unwrap(),
         required_roles: vec![],
+        apply_guard: None,
     };
     let app = test::init_service(
         App::new()
@@ -336,6 +337,7 @@ async fn missing_jwt_roles() {
                 role: "test2".to_owned(),
             },
         ],
+        apply_guard: None,
     };
     let app = test::init_service(
         App::new()
@@ -392,6 +394,7 @@ async fn valid_jwt_roles() {
                 role: "test3".to_owned(),
             },
         ],
+        apply_guard: None,
     };
     let app = test::init_service(
         App::new()
@@ -507,6 +510,7 @@ async fn from_raw_claims_single_aud_as_string() {
             client: "client1".to_owned(),
             role: "test1".to_owned(),
         }],
+        apply_guard: None,
     };
     let app = test::init_service(
         App::new()
@@ -700,6 +704,7 @@ async fn always_return_policy() {
         passthrough_policy: AlwaysReturnPolicy,
         keycloak_oid_public_key: DecodingKey::from_rsa_pem(KEYCLOAK_PK.as_bytes()).unwrap(),
         required_roles: vec![],
+        apply_guard: None,
     };
     let app = test::init_service(
         App::new()
@@ -727,6 +732,7 @@ async fn always_pass_policy() {
         passthrough_policy: AlwaysPassPolicy,
         keycloak_oid_public_key: DecodingKey::from_rsa_pem(KEYCLOAK_PK.as_bytes()).unwrap(),
         required_roles: vec![],
+        apply_guard: None,
     };
     let app = test::init_service(
         App::new()
@@ -752,6 +758,7 @@ async fn compat_with_non_boxed_middleware() {
         passthrough_policy: AlwaysPassPolicy,
         keycloak_oid_public_key: DecodingKey::from_rsa_pem(KEYCLOAK_PK.as_bytes()).unwrap(),
         required_roles: vec![],
+        apply_guard: None,
     };
 
     let _app = actix_web::App::new()
